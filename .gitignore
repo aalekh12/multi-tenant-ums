@@ -1,0 +1,30 @@
+# Binaries
+bin/
+/api
+/seed
+/api.exe
+/seed.exe
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test artifacts
+*.out
+coverage.out
+coverage.html
+
+# Environment variables
+.env
+.env.local
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
