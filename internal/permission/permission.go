@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/yourusername/usermgmt/internal/platform/cache"
-	"github.com/yourusername/usermgmt/internal/platform/httpx"
+	"github.com/multi_tenante_ums/internal/platform/cache"
+	"github.com/multi_tenante_ums/internal/platform/httpx"
 )
 
 // Permission is a single permission entry from the catalog.

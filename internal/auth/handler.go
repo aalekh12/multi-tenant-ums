@@ -3,10 +3,10 @@ package auth
 import (
 	"net/http"
 
-	"github.com/yourusername/usermgmt/internal/middleware"
-	"github.com/yourusername/usermgmt/internal/permission"
-	"github.com/yourusername/usermgmt/internal/platform/httpx"
-	"github.com/yourusername/usermgmt/internal/platform/validate"
+	"github.com/multi_tenante_ums/internal/middleware"
+	"github.com/multi_tenante_ums/internal/permission"
+	"github.com/multi_tenante_ums/internal/platform/httpx"
+	"github.com/multi_tenante_ums/internal/platform/validate"
 )
 
 // Handler is the HTTP handler for auth routes.

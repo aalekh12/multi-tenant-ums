@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/yourusername/usermgmt/internal/platform/httpx"
+	"github.com/multi_tenante_ums/internal/platform/httpx"
 )
 
 // Logger is a structured logging middleware using slog.
@@ -38,4 +38,3 @@ func (rw *responseWriter) WriteHeader(status int) {
 		rw.ResponseWriter.WriteHeader(status)
 	}
 }
-

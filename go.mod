@@ -1,4 +1,4 @@
-module github.com/yourusername/usermgmt
+module github.com/multi_tenante_ums
 
 go 1.26.0
 

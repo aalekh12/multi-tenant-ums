@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/yourusername/usermgmt/internal/middleware"
-	"github.com/yourusername/usermgmt/internal/platform/httpx"
-	"github.com/yourusername/usermgmt/internal/platform/validate"
+	"github.com/multi_tenante_ums/internal/middleware"
+	"github.com/multi_tenante_ums/internal/platform/httpx"
+	"github.com/multi_tenante_ums/internal/platform/validate"
 )
 
 // Handler handles HTTP requests for roles.
@@ -200,4 +200,3 @@ func (h *Handler) AssignPermissions(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 }
-

@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/multi_tenante_ums/internal/api"
+	"github.com/multi_tenante_ums/internal/config"
+	"github.com/multi_tenante_ums/internal/platform/cache"
+	"github.com/multi_tenante_ums/internal/platform/jwtx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/yourusername/usermgmt/internal/api"
-	"github.com/yourusername/usermgmt/internal/config"
-	"github.com/yourusername/usermgmt/internal/platform/cache"
-	"github.com/yourusername/usermgmt/internal/platform/jwtx"
 )
 
 func newTestConfig() *config.Config {
@@ -240,4 +240,3 @@ func TestMalformedUUID_Returns404(t *testing.T) {
 		})
 	}
 }
-

@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/multi_tenante_ums/internal/audit"
+	"github.com/multi_tenante_ums/internal/platform/httpx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/yourusername/usermgmt/internal/audit"
-	"github.com/yourusername/usermgmt/internal/platform/httpx"
 )
 
 func TestCursor_EncodeAndDecode(t *testing.T) {
@@ -102,4 +102,3 @@ func TestEventFromRequest(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 }
-

@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/multi_tenante_ums/internal/platform/password"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/yourusername/usermgmt/internal/platform/password"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -64,4 +64,3 @@ func TestHasher_CostBounds(t *testing.T) {
 	hHigh := password.New(99)
 	assert.NotNil(t, hHigh)
 }
-

@@ -7,9 +7,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/multi_tenante_ums/internal/platform/httpx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/yourusername/usermgmt/internal/platform/httpx"
 )
 
 type sampleBody struct {
@@ -102,4 +102,3 @@ func TestRequestIDMiddleware(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
-

@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/yourusername/usermgmt/internal/platform/httpx"
-	"github.com/yourusername/usermgmt/internal/platform/jwtx"
+	"github.com/multi_tenante_ums/internal/platform/httpx"
+	"github.com/multi_tenante_ums/internal/platform/jwtx"
 )
 
 // AuthValidator validates tokens and checks membership/user status.
@@ -43,4 +43,3 @@ func Authenticate(validator AuthValidator) func(http.Handler) http.Handler {
 
 // ErrInvalidToken is re-exported for use by AuthValidator implementations.
 var ErrInvalidToken = jwtx.ErrInvalidToken
-

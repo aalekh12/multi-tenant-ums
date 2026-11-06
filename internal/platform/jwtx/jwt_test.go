@@ -8,9 +8,9 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/multi_tenante_ums/internal/platform/jwtx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/yourusername/usermgmt/internal/platform/jwtx"
 )
 
 func newTestIssuer() *jwtx.Issuer {
@@ -185,4 +185,3 @@ func TestIssuer_MissingClaims_Rejected(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, jwtx.ErrInvalidToken)
 }
-

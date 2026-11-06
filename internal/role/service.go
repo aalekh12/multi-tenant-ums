@@ -8,8 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/yourusername/usermgmt/internal/audit"
-	"github.com/yourusername/usermgmt/internal/permission"
+	"github.com/multi_tenante_ums/internal/audit"
+	"github.com/multi_tenante_ums/internal/permission"
 )
 
 // Common errors.
@@ -272,4 +272,3 @@ func (s *Service) AssignPermissions(ctx context.Context, r *http.Request, tenant
 
 	return nil
 }
-

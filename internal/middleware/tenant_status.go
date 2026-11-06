@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/yourusername/usermgmt/internal/platform/httpx"
+	"github.com/multi_tenante_ums/internal/platform/httpx"
 )
 
 // TenantChecker verifies the operational status of a tenant.
@@ -39,4 +39,3 @@ func TenantActive(checker TenantChecker) func(http.Handler) http.Handler {
 		})
 	}
 }
-

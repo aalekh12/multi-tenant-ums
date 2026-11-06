@@ -9,12 +9,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/multi_tenante_ums/internal/audit"
+	"github.com/multi_tenante_ums/internal/permission"
+	"github.com/multi_tenante_ums/internal/platform/cache"
+	"github.com/multi_tenante_ums/internal/role"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/yourusername/usermgmt/internal/audit"
-	"github.com/yourusername/usermgmt/internal/permission"
-	"github.com/yourusername/usermgmt/internal/platform/cache"
-	"github.com/yourusername/usermgmt/internal/role"
 )
 
 type mockDB struct{}
@@ -44,12 +44,12 @@ func (m *mockTx) Exec(ctx context.Context, sql string, args ...any) (pgconn.Comm
 }
 
 type mockRoleRepo struct {
-	roles              map[string]*role.Role
-	perms              map[string][]role.PermissionRef
-	usersWithRole      []string
-	replacedPerms      []string
-	roleDeleted        bool
-	roleUpdated        bool
+	roles         map[string]*role.Role
+	perms         map[string][]role.PermissionRef
+	usersWithRole []string
+	replacedPerms []string
+	roleDeleted   bool
+	roleUpdated   bool
 }
 
 func newMockRoleRepo() *mockRoleRepo {
@@ -232,4 +232,3 @@ func TestRoleService_CrossTenant_RoleNotFound(t *testing.T) {
 	_, err := svc.GetByID(context.Background(), "tenant-A", "role-in-B")
 	assert.ErrorIs(t, err, role.ErrRoleNotFound)
 }
-

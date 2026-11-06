@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/yourusername/usermgmt/internal/config"
+	"github.com/multi_tenante_ums/internal/config"
 )
 
 // NewPool creates and validates a new pgxpool connection pool.
@@ -78,4 +78,3 @@ type Querier interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
-

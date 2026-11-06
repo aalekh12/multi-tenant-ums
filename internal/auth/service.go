@@ -10,11 +10,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/yourusername/usermgmt/internal/audit"
-	"github.com/yourusername/usermgmt/internal/middleware"
-	"github.com/yourusername/usermgmt/internal/platform/cache"
-	"github.com/yourusername/usermgmt/internal/platform/jwtx"
-	"github.com/yourusername/usermgmt/internal/platform/password"
+	"github.com/multi_tenante_ums/internal/audit"
+	"github.com/multi_tenante_ums/internal/middleware"
+	"github.com/multi_tenante_ums/internal/platform/cache"
+	"github.com/multi_tenante_ums/internal/platform/jwtx"
+	"github.com/multi_tenante_ums/internal/platform/password"
 )
 
 // Repository is the data access interface for auth.
@@ -388,7 +388,7 @@ func (s *Service) SwitchTenant(ctx context.Context, r *http.Request, userID, cur
 		JTI: refreshJTI, FamilyID: familyID,
 		UserID: userID, TenantID: tenant.ID,
 		ExpiresAt: time.Now().Add(s.cfg.RefreshTTL),
-		IP: ip, UserAgent: &uaStr,
+		IP:        ip, UserAgent: &uaStr,
 	}
 	_ = ua2
 	if err := s.repo.InsertRefreshToken(ctx, tx, rt); err != nil {

@@ -12,9 +12,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/yourusername/usermgmt/internal/audit"
-	"github.com/yourusername/usermgmt/internal/platform/cache"
-	"github.com/yourusername/usermgmt/internal/platform/password"
+	"github.com/multi_tenante_ums/internal/audit"
+	"github.com/multi_tenante_ums/internal/platform/cache"
+	"github.com/multi_tenante_ums/internal/platform/password"
 )
 
 var codeRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,62}$`)
@@ -32,16 +32,16 @@ type DB interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-	QueryRow(ctx context.Context, sql string, args ...any) (pgx.Row)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
 // Service holds tenant business logic.
 type Service struct {
-	db       DB
-	repo     Repository
-	hasher   *password.Hasher
-	cache    cache.Cache
-	auditor  *audit.Recorder
+	db      DB
+	repo    Repository
+	hasher  *password.Hasher
+	cache   cache.Cache
+	auditor *audit.Recorder
 }
 
 // NewService creates a new tenant Service.

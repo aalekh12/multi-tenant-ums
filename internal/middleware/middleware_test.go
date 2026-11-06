@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/multi_tenante_ums/internal/middleware"
 	"github.com/stretchr/testify/assert"
-	"github.com/yourusername/usermgmt/internal/middleware"
 )
 
 type mockAuthValidator struct {
@@ -161,4 +161,3 @@ func TestRequirePermission_LacksPermission_Returns403(t *testing.T) {
 
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 }
-

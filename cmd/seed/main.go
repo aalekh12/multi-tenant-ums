@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/yourusername/usermgmt/internal/config"
-	"github.com/yourusername/usermgmt/internal/platform/password"
+	"github.com/multi_tenante_ums/internal/config"
+	"github.com/multi_tenante_ums/internal/platform/password"
 )
 
 type tenantSeed struct {

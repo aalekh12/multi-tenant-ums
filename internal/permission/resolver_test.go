@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/multi_tenante_ums/internal/permission"
+	"github.com/multi_tenante_ums/internal/platform/cache"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/yourusername/usermgmt/internal/permission"
-	"github.com/yourusername/usermgmt/internal/platform/cache"
 )
 
 type mockPermGetter struct {
@@ -85,4 +85,3 @@ func TestResolver_DBError_NeverAllows(t *testing.T) {
 	require.Error(t, err)
 	assert.False(t, has, "must fail closed to false on error, never allow")
 }
-

@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/yourusername/usermgmt/internal/middleware"
-	"github.com/yourusername/usermgmt/internal/platform/httpx"
+	"github.com/multi_tenante_ums/internal/middleware"
+	"github.com/multi_tenante_ums/internal/platform/httpx"
 )
 
 // Repository provides read access to audit logs.
@@ -239,4 +239,3 @@ type KeysetResponse struct {
 	Data       []Log   `json:"data"`
 	NextCursor *string `json:"next_cursor"`
 }
-

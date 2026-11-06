@@ -7,18 +7,18 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/yourusername/usermgmt/internal/audit"
-	"github.com/yourusername/usermgmt/internal/auth"
-	"github.com/yourusername/usermgmt/internal/config"
-	"github.com/yourusername/usermgmt/internal/middleware"
-	"github.com/yourusername/usermgmt/internal/permission"
-	"github.com/yourusername/usermgmt/internal/platform/cache"
-	"github.com/yourusername/usermgmt/internal/platform/httpx"
-	"github.com/yourusername/usermgmt/internal/platform/jwtx"
-	"github.com/yourusername/usermgmt/internal/platform/password"
-	"github.com/yourusername/usermgmt/internal/role"
-	"github.com/yourusername/usermgmt/internal/tenant"
-	"github.com/yourusername/usermgmt/internal/user"
+	"github.com/multi_tenante_ums/internal/audit"
+	"github.com/multi_tenante_ums/internal/auth"
+	"github.com/multi_tenante_ums/internal/config"
+	"github.com/multi_tenante_ums/internal/middleware"
+	"github.com/multi_tenante_ums/internal/permission"
+	"github.com/multi_tenante_ums/internal/platform/cache"
+	"github.com/multi_tenante_ums/internal/platform/httpx"
+	"github.com/multi_tenante_ums/internal/platform/jwtx"
+	"github.com/multi_tenante_ums/internal/platform/password"
+	"github.com/multi_tenante_ums/internal/role"
+	"github.com/multi_tenante_ums/internal/tenant"
+	"github.com/multi_tenante_ums/internal/user"
 )
 
 // NewRouter constructs the complete HTTP handler with all domains and middlewares.
@@ -216,4 +216,3 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, cacheBackend cache.Cache)
 
 	return r
 }
-

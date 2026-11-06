@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/multi_tenante_ums/internal/platform/cache"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/yourusername/usermgmt/internal/platform/cache"
 )
 
 func TestMemoryCache_GetSetDelete(t *testing.T) {
@@ -78,4 +78,3 @@ func TestMemoryCache_Ping(t *testing.T) {
 	c := cache.NewMemory()
 	assert.NoError(t, c.Ping(ctx))
 }
-

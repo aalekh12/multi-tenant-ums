@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/yourusername/usermgmt/internal/middleware"
-	"github.com/yourusername/usermgmt/internal/platform/httpx"
+	"github.com/multi_tenante_ums/internal/middleware"
+	"github.com/multi_tenante_ums/internal/platform/httpx"
 )
 
 // Log represents one audit log entry.
@@ -89,4 +89,3 @@ func ActorFromCtx(ctx context.Context) (tenantID *string, userID *string) {
 
 // Ptr returns a pointer to the given value.
 func Ptr[T any](v T) *T { return &v }
-

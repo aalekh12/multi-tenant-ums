@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/multi_tenante_ums/internal/platform/validate"
 	"github.com/stretchr/testify/assert"
-	"github.com/yourusername/usermgmt/internal/platform/validate"
 )
 
 type passwordTest struct {
@@ -25,7 +25,7 @@ func TestValidate_PasswordPolicy(t *testing.T) {
 		{"Too short (< 10 chars)", "Pass1", true},
 		{"No digit", "PasswordOnly", true},
 		{"No letter", "123456789012", true},
-		{"Over 72 bytes", strings.Repeat("A1", 37), true}, // 74 chars
+		{"Over 72 bytes", strings.Repeat("A1", 37), true},     // 74 chars
 		{"Exactly 72 bytes", strings.Repeat("A1", 36), false}, // 72 chars
 	}
 
@@ -40,4 +40,3 @@ func TestValidate_PasswordPolicy(t *testing.T) {
 		})
 	}
 }
-

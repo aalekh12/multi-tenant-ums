@@ -10,10 +10,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/yourusername/usermgmt/internal/audit"
-	"github.com/yourusername/usermgmt/internal/permission"
-	"github.com/yourusername/usermgmt/internal/platform/cache"
-	"github.com/yourusername/usermgmt/internal/platform/password"
+	"github.com/multi_tenante_ums/internal/audit"
+	"github.com/multi_tenante_ums/internal/permission"
+	"github.com/multi_tenante_ums/internal/platform/cache"
+	"github.com/multi_tenante_ums/internal/platform/password"
 )
 
 // DB is the database interface for user transactions.
@@ -164,9 +164,9 @@ func (s *Service) Create(ctx context.Context, r *http.Request, tenantID, actorID
 	_ = s.auditor.Record(ctx, tx, audit.Event{
 		TenantID: &tid, ActorUserID: &uid,
 		Action: "user.create", TargetType: "user", TargetID: &userID,
-		Metadata:  map[string]any{"email": in.Email, "full_name": in.FullName},
-		Success:   true,
-		IP:        ip, UserAgent: ua, RequestID: reqID,
+		Metadata: map[string]any{"email": in.Email, "full_name": in.FullName},
+		Success:  true,
+		IP:       ip, UserAgent: ua, RequestID: reqID,
 	})
 
 	if err := tx.Commit(ctx); err != nil {

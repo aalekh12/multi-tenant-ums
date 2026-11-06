@@ -3,23 +3,18 @@
 package integration_test
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/multi_tenante_ums/internal/api"
+	"github.com/multi_tenante_ums/internal/config"
+	"github.com/multi_tenante_ums/internal/platform/cache"
+	"github.com/multi_tenante_ums/internal/platform/db"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/yourusername/usermgmt/internal/api"
-	"github.com/yourusername/usermgmt/internal/config"
-	"github.com/yourusername/usermgmt/internal/platform/cache"
-	"github.com/yourusername/usermgmt/internal/platform/db"
 )
 
 func getTestDB(t *testing.T) *pgxpool.Pool {
@@ -74,4 +69,3 @@ func TestFullIntegration_CrossTenantIsolationAndDBConstraints(t *testing.T) {
 		assert.Error(t, err, "cross-tenant insert must fail foreign key constraint at database level")
 	})
 }
-

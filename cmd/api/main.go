@@ -10,10 +10,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/yourusername/usermgmt/internal/api"
-	"github.com/yourusername/usermgmt/internal/config"
-	"github.com/yourusername/usermgmt/internal/platform/cache"
-	"github.com/yourusername/usermgmt/internal/platform/db"
+	"github.com/multi_tenante_ums/internal/api"
+	"github.com/multi_tenante_ums/internal/config"
+	"github.com/multi_tenante_ums/internal/platform/cache"
+	"github.com/multi_tenante_ums/internal/platform/db"
 )
 
 func main() {
@@ -114,4 +114,3 @@ func main() {
 		slog.Info("server exited cleanly")
 	}
 }
-
