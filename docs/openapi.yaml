@@ -1,0 +1,1158 @@
+openapi: 3.0.3
+info:
+  title: Multi-Tenant User Management API
+  version: 1.0.0
+  description: |
+    Production-ready Multi-Tenant User Management System backend built with Go, PostgreSQL, and Redis.
+    Provides multi-tenancy, RBAC permissions, JWT authentication with token rotation, tenant isolation, and audit logging.
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local Development Server
+
+paths:
+  # ---------------------------------------------------------------------------
+  # Health Checks
+  # ---------------------------------------------------------------------------
+  /healthz:
+    get:
+      summary: Liveness probe
+      description: Returns OK if the process is alive.
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /readyz:
+    get:
+      summary: Readiness probe
+      description: Returns OK if PostgreSQL and Redis connections are responsive.
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ready
+        '503':
+          description: Dependent infrastructure unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ---------------------------------------------------------------------------
+  # Authentication
+  # ---------------------------------------------------------------------------
+  /auth/login:
+    post:
+      summary: Authenticate user in a tenant
+      description: Authenticates user credentials scoped to a tenant code. Returns access & refresh tokens.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, tenant_code]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: admin@acme.test
+                password:
+                  type: string
+                  example: ChangeMe!12345
+                tenant_code:
+                  type: string
+                  example: acme
+      responses:
+        '200':
+          description: Successful authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many failed login attempts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/refresh:
+    post:
+      summary: Rotate refresh token
+      description: Exchanges a valid refresh token for a newly issued access & refresh token pair (family rotation).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        '200':
+          description: Tokens refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+        '401':
+          description: Invalid or revoked refresh token (family revocation triggered on reuse)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/logout:
+    post:
+      security:
+        - BearerAuth: []
+      summary: Revoke session
+      description: Revokes the current refresh token and family.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '204':
+          description: Session terminated successfully
+
+  /auth/switch-tenant:
+    post:
+      security:
+        - BearerAuth: []
+      summary: Switch active tenant context
+      description: Issues a new JWT pair for the same user in another tenant where they have an active membership.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_tenant_id]
+              properties:
+                target_tenant_id:
+                  type: string
+                  format: uuid
+                  example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        '200':
+          description: Switched tenant context successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+        '403':
+          description: User does not belong to target tenant or target tenant is suspended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/me:
+    get:
+      security:
+        - BearerAuth: []
+      summary: Current user profile and permissions
+      description: Returns identity, active tenant membership, and granted permissions for the active tenant.
+      responses:
+        '200':
+          description: User profile and permissions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/UserProfile'
+
+  # ---------------------------------------------------------------------------
+  # Tenants (Platform Admin)
+  # ---------------------------------------------------------------------------
+  /tenants:
+    post:
+      security:
+        - BearerAuth: []
+      summary: Create new tenant
+      description: Platform superadmins only. Bootstraps a tenant with default roles and an initial admin user in a single transaction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, code, admin]
+              properties:
+                name:
+                  type: string
+                  example: Initech Corporation
+                code:
+                  type: string
+                  example: initech
+                admin:
+                  type: object
+                  required: [email, password, full_name]
+                  properties:
+                    email:
+                      type: string
+                      format: email
+                      example: admin@initech.test
+                    password:
+                      type: string
+                      example: ChangeMe!12345
+                    full_name:
+                      type: string
+                      example: Initech Admin
+      responses:
+        '201':
+          description: Tenant created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Tenant'
+        '400':
+          description: Invalid tenant code or validation failure
+        '403':
+          description: Platform admin access required
+        '409':
+          description: Tenant code already exists
+
+    get:
+      security:
+        - BearerAuth: []
+      summary: List all tenants
+      description: Platform superadmins only. Lists tenants with status filter and offset pagination.
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, suspended]
+      responses:
+        '200':
+          description: List of tenants
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantListResponse'
+
+  /tenants/{id}:
+    get:
+      security:
+        - BearerAuth: []
+      summary: Get tenant by ID
+      description: Platform superadmins only.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Tenant details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Tenant'
+        '404':
+          description: Tenant not found
+
+    patch:
+      security:
+        - BearerAuth: []
+      summary: Update tenant name
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: Initech Global
+      responses:
+        '200':
+          description: Tenant updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Tenant'
+
+  /tenants/{id}/suspend:
+    post:
+      security:
+        - BearerAuth: []
+      summary: Suspend tenant
+      description: Suspends a tenant, immediately revoking all refresh tokens and returning 403 on subsequent requests.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Tenant suspended
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Tenant'
+        '400':
+          description: Cannot suspend platform tenant
+
+  /tenants/{id}/activate:
+    post:
+      security:
+        - BearerAuth: []
+      summary: Activate tenant
+      description: Restores a suspended tenant to active status.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Tenant activated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Tenant'
+
+  # ---------------------------------------------------------------------------
+  # Current Tenant
+  # ---------------------------------------------------------------------------
+  /tenant:
+    get:
+      security:
+        - BearerAuth: []
+      summary: Get active tenant profile
+      responses:
+        '200':
+          description: Current tenant details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Tenant'
+
+    patch:
+      security:
+        - BearerAuth: []
+      summary: Update active tenant name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: Acme Corporation Inc.
+      responses:
+        '200':
+          description: Tenant updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Tenant'
+
+  # ---------------------------------------------------------------------------
+  # Users
+  # ---------------------------------------------------------------------------
+  /users:
+    post:
+      security:
+        - BearerAuth: []
+      summary: Create or invite user to tenant
+      description: Creates global user or links existing user to current tenant with specified roles.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, full_name, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: dev@acme.test
+                full_name:
+                  type: string
+                  example: Alice Developer
+                password:
+                  type: string
+                  example: ChangeMe!12345
+                role_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '201':
+          description: User created / added to tenant
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/UserWithRoles'
+        '400':
+          description: Validation error or unknown field (e.g. tenant_id in body)
+        '409':
+          description: User is already an active member of this tenant
+
+    get:
+      security:
+        - BearerAuth: []
+      summary: List users in active tenant
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: q
+          in: query
+          description: Case-insensitive search on email or full_name
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive]
+        - name: role_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: include_deleted
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: List of users with roles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserListResponse'
+
+  /users/{id}:
+    get:
+      security:
+        - BearerAuth: []
+      summary: Get user details in tenant
+      description: Returns 404 if user does not exist or belongs to another tenant (strict isolation).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/UserWithRoles'
+        '404':
+          description: User not found
+
+    patch:
+      security:
+        - BearerAuth: []
+      summary: Update user profile / status in tenant
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                full_name:
+                  type: string
+                  example: Alice Smith
+                status:
+                  type: string
+                  enum: [active, inactive]
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/User'
+
+    delete:
+      security:
+        - BearerAuth: []
+      summary: Remove user from tenant (soft delete)
+      description: Soft deletes user membership in active tenant. If 0 active tenant memberships remain globally, soft deletes user. Self-deletion is forbidden.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: User membership deleted
+        '400':
+          description: Cannot delete own membership
+        '404':
+          description: User not found
+
+  /users/{id}/password:
+    put:
+      security:
+        - BearerAuth: []
+      summary: Change user password
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  example: NewSecurePassword!123
+      responses:
+        '204':
+          description: Password updated and all user refresh tokens revoked
+
+  /users/{id}/roles:
+    put:
+      security:
+        - BearerAuth: []
+      summary: Replace user roles in tenant
+      description: Replaces assigned roles. Fails with 403 if attempting to grant permissions actor does not possess.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role_ids]
+              properties:
+                role_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: Roles updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/UserWithRoles'
+        '403':
+          description: Privilege escalation attempt
+        '404':
+          description: User or role not found
+
+  # ---------------------------------------------------------------------------
+  # Roles & RBAC
+  # ---------------------------------------------------------------------------
+  /roles:
+    post:
+      security:
+        - BearerAuth: []
+      summary: Create custom role
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: auditor
+                description:
+                  type: string
+                  example: Read only audit reviewer
+                permission_ids:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        '201':
+          description: Role created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Role'
+        '403':
+          description: Privilege escalation attempt
+
+    get:
+      security:
+        - BearerAuth: []
+      summary: List roles in tenant
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of roles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleListResponse'
+
+  /roles/{id}:
+    get:
+      security:
+        - BearerAuth: []
+      summary: Get role details with permissions
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Role details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/RoleWithPermissions'
+        '404':
+          description: Role not found
+
+    patch:
+      security:
+        - BearerAuth: []
+      summary: Update custom role
+      description: System roles cannot be renamed or modified.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '200':
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Role'
+        '400':
+          description: Cannot modify system role
+
+    delete:
+      security:
+        - BearerAuth: []
+      summary: Delete custom role
+      description: System roles cannot be deleted.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Role deleted
+        '400':
+          description: Cannot delete system role
+
+  /roles/{id}/permissions:
+    put:
+      security:
+        - BearerAuth: []
+      summary: Set role permissions
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permission_ids]
+              properties:
+                permission_ids:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        '200':
+          description: Permissions assigned and caches invalidated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/RoleWithPermissions'
+        '403':
+          description: Privilege escalation attempt
+
+  # ---------------------------------------------------------------------------
+  # Permissions Catalog
+  # ---------------------------------------------------------------------------
+  /permissions:
+    get:
+      security:
+        - BearerAuth: []
+      summary: List all available permissions
+      responses:
+        '200':
+          description: Catalog of system permissions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Permission'
+
+  # ---------------------------------------------------------------------------
+  # Audit Logs
+  # ---------------------------------------------------------------------------
+  /audit-logs:
+    get:
+      security:
+        - BearerAuth: []
+      summary: List audit log entries
+      description: Keyset pagination cursor-based log search.
+      parameters:
+        - name: cursor
+          in: query
+          description: Base64 opaque keyset cursor
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: action
+          in: query
+          schema:
+            type: string
+            example: user.create
+        - name: actor_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: target_type
+          in: query
+          schema:
+            type: string
+            example: user
+      responses:
+        '200':
+          description: Audit log records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    TokenPair:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_in:
+          type: integer
+          example: 900
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        full_name:
+          type: string
+        tenant:
+          $ref: '#/components/schemas/Tenant'
+        permissions:
+          type: array
+          items:
+            type: string
+            example: user:create
+
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+        status:
+          type: string
+          enum: [active, suspended]
+        is_platform:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        full_name:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Role:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        is_system:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    UserWithRoles:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          properties:
+            roles:
+              type: array
+              items:
+                $ref: '#/components/schemas/Role'
+
+    RoleWithPermissions:
+      allOf:
+        - $ref: '#/components/schemas/Role'
+        - type: object
+          properties:
+            permissions:
+              type: array
+              items:
+                $ref: '#/components/schemas/Permission'
+
+    Permission:
+      type: object
+      properties:
+        id:
+          type: integer
+        resource:
+          type: string
+        action:
+          type: string
+        code:
+          type: string
+          example: user:create
+        description:
+          type: string
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        tenant_id:
+          type: string
+          format: uuid
+        actor_user_id:
+          type: string
+          format: uuid
+        action:
+          type: string
+        target_type:
+          type: string
+        target_id:
+          type: string
+        metadata:
+          type: object
+        success:
+          type: boolean
+        ip:
+          type: string
+        user_agent:
+          type: string
+        request_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    AuditLogResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLog'
+        next_cursor:
+          type: string
+
+    TenantListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tenant'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    UserListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserWithRoles'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    RoleListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total_items:
+          type: integer
+        total_pages:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: UNAUTHENTICATED
+            message:
+              type: string
+              example: Invalid credentials
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                  issue:
+                    type: string
+            request_id:
+              type: string
+

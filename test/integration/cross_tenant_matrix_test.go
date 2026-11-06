@@ -50,14 +50,15 @@ func TestUnknownFieldInBody_Returns400(t *testing.T) {
 	})
 
 	tid := uuid.New().String()
-	token, _, err := issuer.IssueAccess(uuid.New().String(), tid, uuid.New().String(), 15*time.Minute)
+	uid := uuid.New().String()
+	token, _, err := issuer.IssueAccess(uid, tid, uuid.New().String(), 15*time.Minute)
 	require.NoError(t, err)
 
 	// Pre-populate tenant status so TenantActive middleware passes
 	_ = c.Set(context.Background(), "tenant:status:"+tid, "active", 30*time.Second)
 
 	// Pre-populate permissions for "user:create" so RequirePermission passes
-	_ = c.Set(context.Background(), "perm:"+tid+":*", "[\"user:create\"]", 5*time.Minute)
+	_ = c.Set(context.Background(), "perm:"+tid+":"+uid, "[\"user:create\"]", 5*time.Minute)
 
 	// Send POST /api/v1/users with forbidden "tenant_id" field in JSON body
 	body := map[string]any{
