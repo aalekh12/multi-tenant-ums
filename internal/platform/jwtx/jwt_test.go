@@ -17,8 +17,8 @@ func newTestIssuer() *jwtx.Issuer {
 	return jwtx.New(jwtx.Config{
 		Secret:   []byte("test-super-secret-key-at-least-32-bytes!"),
 		Kid:      "v1",
-		Issuer:   "usermgmt-test",
-		Audience: "usermgmt-test-api",
+		Issuer:   "multi_tenant_ums-test",
+		Audience: "multi_tenant_ums-test-api",
 	})
 }
 
@@ -108,8 +108,8 @@ func TestIssuer_WrongAlgorithm_None_Rejected(t *testing.T) {
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        uuid.New().String(),
 			Subject:   uuid.New().String(),
-			Issuer:    "usermgmt-test",
-			Audience:  jwt.ClaimStrings{"usermgmt-test-api"},
+			Issuer:    "multi_tenant_ums-test",
+			Audience:  jwt.ClaimStrings{"multi_tenant_ums-test-api"},
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
 		},
@@ -134,8 +134,8 @@ func TestIssuer_WrongAlgorithm_RS256_Rejected(t *testing.T) {
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        uuid.New().String(),
 			Subject:   uuid.New().String(),
-			Issuer:    "usermgmt-test",
-			Audience:  jwt.ClaimStrings{"usermgmt-test-api"},
+			Issuer:    "multi_tenant_ums-test",
+			Audience:  jwt.ClaimStrings{"multi_tenant_ums-test-api"},
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
 		},
@@ -161,8 +161,8 @@ func TestIssuer_MissingClaims_Rejected(t *testing.T) {
 	iss := jwtx.New(jwtx.Config{
 		Secret:   secret,
 		Kid:      "v1",
-		Issuer:   "usermgmt-test",
-		Audience: "usermgmt-test-api",
+		Issuer:   "multi_tenant_ums-test",
+		Audience: "multi_tenant_ums-test-api",
 	})
 
 	// Missing TenantID (tid)
@@ -170,8 +170,8 @@ func TestIssuer_MissingClaims_Rejected(t *testing.T) {
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        uuid.New().String(),
 			Subject:   uuid.New().String(),
-			Issuer:    "usermgmt-test",
-			Audience:  jwt.ClaimStrings{"usermgmt-test-api"},
+			Issuer:    "multi_tenant_ums-test",
+			Audience:  jwt.ClaimStrings{"multi_tenant_ums-test-api"},
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
 		},

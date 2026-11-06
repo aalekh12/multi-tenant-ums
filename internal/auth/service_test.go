@@ -131,8 +131,8 @@ func setupAuthService(repo *mockAuthRepo) (*auth.Service, *jwtx.Issuer) {
 	issuer := jwtx.New(jwtx.Config{
 		Secret:   []byte("test-super-secret-key-at-least-32-bytes!"),
 		Kid:      "v1",
-		Issuer:   "usermgmt",
-		Audience: "usermgmt-api",
+		Issuer:   "multi_tenant_ums",
+		Audience: "multi_tenant_ums-api",
 	})
 	hasher := password.New(bcrypt.MinCost)
 	c := cache.NewMemory()

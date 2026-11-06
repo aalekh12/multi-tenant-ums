@@ -1,6 +1,6 @@
 .PHONY: up down migrate-up migrate-down seed run test test-integration cover swagger lint bench
 
-DB_URL ?= postgres://postgres:postgrespassword@localhost:5432/usermgmt?sslmode=disable
+DB_URL ?= postgres://postgres:postgrespassword@localhost:5432/multi_tenant_ums?sslmode=disable
 MIGRATE_IMAGE ?= migrate/migrate:v4.17.0
 
 up:

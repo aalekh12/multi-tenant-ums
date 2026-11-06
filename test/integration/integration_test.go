@@ -20,7 +20,7 @@ import (
 func getTestDB(t *testing.T) *pgxpool.Pool {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "postgres://postgres:postgrespassword@localhost:5432/usermgmt?sslmode=disable"
+		dbURL = "postgres://postgres:postgrespassword@localhost:5432/multi_tenant_ums?sslmode=disable"
 	}
 
 	cfg := &config.Config{

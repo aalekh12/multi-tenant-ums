@@ -3,17 +3,17 @@ version: '3.8'
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: usermgmt-postgres
+    container_name: multi_tenant_ums-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgrespassword
-      POSTGRES_DB: usermgmt
+      POSTGRES_DB: multi_tenant_ums
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d usermgmt"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d multi_tenant_ums"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -21,7 +21,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: usermgmt-redis
+    container_name: multi_tenant_ums-redis
     ports:
       - "6379:6379"
     healthcheck:
@@ -33,12 +33,12 @@ services:
 
   migrate:
     image: migrate/migrate:v4.17.0
-    container_name: usermgmt-migrate
+    container_name: multi_tenant_ums-migrate
     volumes:
       - ./migrations:/migrations
     command:
       - -path=/migrations
-      - -database=postgres://postgres:postgrespassword@postgres:5432/usermgmt?sslmode=disable
+      - -database=postgres://postgres:postgrespassword@postgres:5432/multi_tenant_ums?sslmode=disable
       - up
     depends_on:
       postgres:
@@ -49,17 +49,17 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: usermgmt-api
+    container_name: multi_tenant_ums-api
     ports:
       - "8080:8080"
     environment:
       HTTP_ADDR: ":8080"
-      DATABASE_URL: "postgres://postgres:postgrespassword@postgres:5432/usermgmt?sslmode=disable"
+      DATABASE_URL: "postgres://postgres:postgrespassword@postgres:5432/multi_tenant_ums?sslmode=disable"
       REDIS_URL: "redis://redis:6379/0"
-      JWT_SECRET: "super-secret-key-that-is-at-least-32-bytes-long-for-jwt"
+      JWT_SECRET: "PU55wJ14YGEglg+uMBVjz80EW9Qn6DQDUSB6keV2XdA="
       JWT_KID: "v1"
-      JWT_ISSUER: "usermgmt"
-      JWT_AUDIENCE: "usermgmt-api"
+      JWT_ISSUER: "multi_tenant_ums"
+      JWT_AUDIENCE: "multi_tenant_ums-api"
       ACCESS_TTL: "15m"
       REFRESH_TTL: "168h"
       BCRYPT_COST: "12"
