@@ -92,8 +92,8 @@ flowchart TD
 
 1. Clone and enter the repository:
    ```bash
-   git clone https://github.com/yourusername/usermgmt.git
-   cd usermgmt
+   git clone git@github.com:aalekh12/multi-tenant-ums.git
+   cd multi-tenant-ums
    ```
 
 2. Start PostgreSQL, Redis, and run migrations:
@@ -267,8 +267,9 @@ go test -race ./...
 ## 9. API Documentation & Artifacts
 
 - **Interactive Swagger UI:** Served locally at [`http://localhost:8080/swagger/index.html`](http://localhost:8080/swagger/index.html).
-- **OpenAPI 3.0 Specification:** Stored at [`docs/openapi.yaml`](file:///docs/openapi.yaml).
-- **Postman Collection:** Stored at [`docs/postman_collection.json`](file:///docs/postman_collection.json).
-- **Architecture Design Document:** Read [`docs/DESIGN.md`](file:///docs/DESIGN.md) for full architectural trade-offs.
-- **Database ER Diagram:** Visual Mermaid diagram and SQL relationship documentation at [`docs/er-diagram.md`](file:///docs/er-diagram.md).
+- **OpenAPI 3.0 Specification:** Stored at [`docs/openapi.yaml`](https://github.com/aalekh12/multi-tenant-ums/blob/master/docs/openapi.yaml).
+- **Postman Collection:** Stored at [`docs/postman_collection.json`](https://github.com/aalekh12/multi-tenant-ums/blob/master/docs/postman_collection.json).
+- **Architecture Design Document:** Read [`docs/DESIGN.md`]([file:///docs/DESIGN.md](https://github.com/aalekh12/multi-tenant-ums/blob/master/docs/DESIGN.md)) for full architectural trade-offs.
+- **Database ER Diagram:** [Visual Diagram](https://github.com/aalekh12/multi-tenant-ums/blob/master/docs/multi_tenant_database_erd.jpg) 
+- **SQL Relationship Documentation**  [`docs/er-diagram.md`](https://github.com/aalekh12/multi-tenant-ums/blob/master/docs/er-diagram.md).
 
