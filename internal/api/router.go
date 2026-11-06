@@ -95,7 +95,8 @@ func NewRouter(cfg *config.Config, pool *pgxpool.Pool, cacheBackend cache.Cache)
 
 	// Swagger / OpenAPI documentation
 	r.Get("/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "docs/openapi.yaml")
+		w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
+		w.Write(openAPISpec)
 	})
 
 	r.Get("/swagger", func(w http.ResponseWriter, r *http.Request) {
