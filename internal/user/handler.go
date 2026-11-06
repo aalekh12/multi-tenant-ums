@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/yourusername/usermgmt/internal/audit"
 	"github.com/yourusername/usermgmt/internal/middleware"
 	"github.com/yourusername/usermgmt/internal/platform/httpx"
 	"github.com/yourusername/usermgmt/internal/platform/validate"
@@ -212,52 +211,67 @@ func (h *Handler) AssignRoles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate role IDs belong to this tenant
-	for _, rid := range in.RoleIDs {
-		exists, err := h.svc.repo.RoleExists(r.Context(), auth.TenantID, rid)
-		if err != nil {
-			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.ErrCodeInternal, "failed to check role")
-			return
-		}
-		if !exists {
+	if err := h.svc.AssignRoles(r.Context(), r, auth.TenantID, id, auth.UserID, in.RoleIDs); err != nil {
+		switch err {
+		case ErrRoleNotFound:
 			httpx.WriteError(w, r, http.StatusNotFound, httpx.ErrCodeRoleNotFound, "role not found in this tenant")
-			return
+		case ErrNotFound:
+			httpx.WriteError(w, r, http.StatusNotFound, httpx.ErrCodeNotFound, "user not found")
+		default:
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.ErrCodeInternal, "failed to assign roles")
 		}
-	}
-
-	// Check user exists in this tenant
-	_, err := h.svc.GetByID(r.Context(), auth.TenantID, id)
-	if err != nil {
-		httpx.WriteError(w, r, http.StatusNotFound, httpx.ErrCodeNotFound, "user not found")
 		return
 	}
 
-	tx, err := h.svc.db.Begin(r.Context())
-	if err != nil {
-		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.ErrCodeInternal, "failed to start transaction")
-		return
-	}
-	defer func() { _ = tx.Rollback(r.Context()) }()
+	w.WriteHeader(http.StatusNoContent)
+}
 
-	if err := h.svc.repo.AssignRoles(r.Context(), tx, auth.TenantID, id, auth.UserID, in.RoleIDs); err != nil {
-		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.ErrCodeInternal, "failed to assign roles")
-		return
-	}
-
-	ip, ua, reqID := audit.EventFromRequest(r)
-	uid := auth.UserID
-	tid := auth.TenantID
-	_ = h.svc.auditor.Record(r.Context(), tx, audit.Event{
-		TenantID: &tid, ActorUserID: &uid,
-		Action: "user.roles_update", TargetType: "user", TargetID: &id,
-		Metadata: map[string]any{"role_ids": in.RoleIDs},
-		Success:  true, IP: ip, UserAgent: ua, RequestID: reqID,
-	})
-
-	if err := tx.Commit(r.Context()); err != nil {
-		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.ErrCodeInternal, "failed to commit")
+// AddRole handles POST /api/v1/users/{id}/roles/{roleId}.
+func (h *Handler) AddRole(w http.ResponseWriter, r *http.Request) {
+	auth := middleware.MustAuthContext(r.Context())
+	id := chi.URLParam(r, "id")
+	roleID := chi.URLParam(r, "roleId")
+	if !isValidUUID(id) || !isValidUUID(roleID) {
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.ErrCodeNotFound, "resource not found")
 		return
 	}
 
-	h.svc.resolver.InvalidateUser(r.Context(), auth.TenantID, id)
+	if err := h.svc.AddRole(r.Context(), r, auth.TenantID, id, roleID, auth.UserID); err != nil {
+		switch err {
+		case ErrRoleNotFound:
+			httpx.WriteError(w, r, http.StatusNotFound, httpx.ErrCodeRoleNotFound, "role not found in this tenant")
+		case ErrNotFound:
+			httpx.WriteError(w, r, http.StatusNotFound, httpx.ErrCodeNotFound, "user not found")
+		default:
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.ErrCodeInternal, "failed to add role")
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// RemoveRole handles DELETE /api/v1/users/{id}/roles/{roleId}.
+func (h *Handler) RemoveRole(w http.ResponseWriter, r *http.Request) {
+	auth := middleware.MustAuthContext(r.Context())
+	id := chi.URLParam(r, "id")
+	roleID := chi.URLParam(r, "roleId")
+	if !isValidUUID(id) || !isValidUUID(roleID) {
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.ErrCodeNotFound, "resource not found")
+		return
+	}
+
+	if err := h.svc.RemoveRole(r.Context(), r, auth.TenantID, id, roleID, auth.UserID); err != nil {
+		switch err {
+		case ErrRoleNotFound:
+			httpx.WriteError(w, r, http.StatusNotFound, httpx.ErrCodeRoleNotFound, "role not found in this tenant")
+		case ErrNotFound:
+			httpx.WriteError(w, r, http.StatusNotFound, httpx.ErrCodeNotFound, "user not found")
+		default:
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.ErrCodeInternal, "failed to remove role")
+		}
+		return
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }

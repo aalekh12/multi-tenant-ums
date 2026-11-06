@@ -22,8 +22,8 @@ func NewRepository(db *pgxpool.Pool) *PgRepository {
 	return &PgRepository{db: db}
 }
 
-// dbUser is the internal row type (joins users + tenant_users).
-type dbUser struct {
+// DBUser is the internal row type (joins users + tenant_users).
+type DBUser struct {
 	ID           string
 	Email        string
 	PasswordHash string
@@ -36,8 +36,8 @@ type dbUser struct {
 }
 
 // FindByEmail finds a global user by email (non-deleted).
-func (r *PgRepository) FindByEmail(ctx context.Context, email string) (*dbUser, error) {
-	u := &dbUser{}
+func (r *PgRepository) FindByEmail(ctx context.Context, email string) (*DBUser, error) {
+	u := &DBUser{}
 	err := r.db.QueryRow(ctx, `
 		SELECT id, email, password_hash, full_name, created_at, updated_at, deleted_at
 		FROM users WHERE email = $1 AND deleted_at IS NULL`, email,
@@ -49,8 +49,8 @@ func (r *PgRepository) FindByEmail(ctx context.Context, email string) (*dbUser, 
 }
 
 // FindByEmailTx finds a global user by email within a transaction.
-func (r *PgRepository) FindByEmailTx(ctx context.Context, tx pgx.Tx, email string) (*dbUser, error) {
-	u := &dbUser{}
+func (r *PgRepository) FindByEmailTx(ctx context.Context, tx pgx.Tx, email string) (*DBUser, error) {
+	u := &DBUser{}
 	err := tx.QueryRow(ctx, `
 		SELECT id, email, password_hash, full_name, created_at, updated_at, deleted_at
 		FROM users WHERE email = $1 AND deleted_at IS NULL FOR UPDATE`, email,
@@ -62,8 +62,8 @@ func (r *PgRepository) FindByEmailTx(ctx context.Context, tx pgx.Tx, email strin
 }
 
 // GetByIDInTenant retrieves a user visible within a tenant.
-func (r *PgRepository) GetByIDInTenant(ctx context.Context, tenantID, userID string) (*dbUser, error) {
-	u := &dbUser{}
+func (r *PgRepository) GetByIDInTenant(ctx context.Context, tenantID, userID string) (*DBUser, error) {
+	u := &DBUser{}
 	err := r.db.QueryRow(ctx, `
 		SELECT u.id, u.email, u.password_hash, u.full_name, tu.status, u.created_at, u.updated_at, u.deleted_at, tu.deleted_at
 		FROM users u
@@ -252,7 +252,7 @@ func (r *PgRepository) RoleExists(ctx context.Context, tenantID, roleID string) 
 }
 
 // List retrieves users in a tenant with optional filters and pagination.
-func (r *PgRepository) List(ctx context.Context, f ListFilter, page, pageSize int) ([]dbUser, int64, error) {
+func (r *PgRepository) List(ctx context.Context, f ListFilter, page, pageSize int) ([]DBUser, int64, error) {
 	conds := []string{"tu.tenant_id = $1"}
 	args := []any{f.TenantID}
 	idx := 2
@@ -307,10 +307,10 @@ func (r *PgRepository) List(ctx context.Context, f ListFilter, page, pageSize in
 	}
 	defer rows.Close()
 
-	var users []dbUser
+	var users []DBUser
 	var total int64
 	for rows.Next() {
-		var u dbUser
+		var u DBUser
 		if err := rows.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.FullName, &u.Status,
 			&u.CreatedAt, &u.UpdatedAt, &u.DeletedAt, &u.TUDeletedAt, &total); err != nil {
 			return nil, 0, err

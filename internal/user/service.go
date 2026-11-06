@@ -6,12 +6,43 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/yourusername/usermgmt/internal/audit"
 	"github.com/yourusername/usermgmt/internal/permission"
 	"github.com/yourusername/usermgmt/internal/platform/cache"
 	"github.com/yourusername/usermgmt/internal/platform/password"
 )
+
+// DB is the database interface for user transactions.
+type DB interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+// Repository is the repository interface for user domain.
+type Repository interface {
+	FindByEmail(ctx context.Context, email string) (*DBUser, error)
+	FindByEmailTx(ctx context.Context, tx pgx.Tx, email string) (*DBUser, error)
+	GetByIDInTenant(ctx context.Context, tenantID, userID string) (*DBUser, error)
+	GetMembership(ctx context.Context, tenantID, userID string) (*MembershipRow, error)
+	CountActiveMemberships(ctx context.Context, tx pgx.Tx, userID string) (int, error)
+	CreateUser(ctx context.Context, tx pgx.Tx, email, passwordHash, fullName string) (string, time.Time, time.Time, error)
+	CreateMembership(ctx context.Context, tx pgx.Tx, tenantID, userID, status string) error
+	AssignRoles(ctx context.Context, tx pgx.Tx, tenantID, userID, assignedBy string, roleIDs []string) error
+	AddRole(ctx context.Context, tx pgx.Tx, tenantID, userID, roleID, assignedBy string) error
+	RemoveRole(ctx context.Context, tx pgx.Tx, tenantID, userID, roleID string) error
+	GetUserRoles(ctx context.Context, tenantID, userID string) ([]RoleRef, error)
+	SoftDeleteMembership(ctx context.Context, tx pgx.Tx, tenantID, userID string) error
+	SoftDeleteUser(ctx context.Context, tx pgx.Tx, userID string) error
+	UpdateUser(ctx context.Context, tx pgx.Tx, tenantID, userID string, fullName *string, status *string) error
+	UpdatePassword(ctx context.Context, tx pgx.Tx, userID, hash string) error
+	RevokeUserTenantTokens(ctx context.Context, tx pgx.Tx, userID, tenantID string) error
+	RoleExists(ctx context.Context, tenantID, roleID string) (bool, error)
+	List(ctx context.Context, f ListFilter, page, pageSize int) ([]DBUser, int64, error)
+}
 
 // ErrNotFound is returned when a user is not found in this tenant.
 var ErrNotFound = errors.New("user not found")
@@ -27,8 +58,8 @@ var ErrRoleNotFound = errors.New("role not found in this tenant")
 
 // Service holds user business logic.
 type Service struct {
-	db       *pgxpool.Pool
-	repo     *PgRepository
+	db       DB
+	repo     Repository
 	hasher   *password.Hasher
 	resolver *permission.Resolver
 	cache    cache.Cache
@@ -37,8 +68,8 @@ type Service struct {
 
 // NewService creates a new user Service.
 func NewService(
-	db *pgxpool.Pool,
-	repo *PgRepository,
+	db DB,
+	repo Repository,
 	hasher *password.Hasher,
 	resolver *permission.Resolver,
 	c cache.Cache,
@@ -47,7 +78,7 @@ func NewService(
 	return &Service{db: db, repo: repo, hasher: hasher, resolver: resolver, cache: c, auditor: auditor}
 }
 
-func toUser(u *dbUser) *User {
+func toUser(u *DBUser) *User {
 	return &User{
 		ID:        u.ID,
 		Email:     u.Email,
@@ -316,4 +347,150 @@ func (s *Service) ChangePassword(ctx context.Context, r *http.Request, tenantID,
 	})
 
 	return tx.Commit(ctx)
+}
+
+// AssignRoles replaces the user's roles in the tenant.
+func (s *Service) AssignRoles(ctx context.Context, r *http.Request, tenantID, userID, actorID string, roleIDs []string) error {
+	for _, rid := range roleIDs {
+		exists, err := s.repo.RoleExists(ctx, tenantID, rid)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return ErrRoleNotFound
+		}
+	}
+
+	if _, err := s.GetByID(ctx, tenantID, userID); err != nil {
+		return err
+	}
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := s.repo.AssignRoles(ctx, tx, tenantID, userID, actorID, roleIDs); err != nil {
+		return err
+	}
+
+	ip, ua, reqID := audit.EventFromRequest(r)
+	uid := actorID
+	tid := tenantID
+	_ = s.auditor.Record(ctx, tx, audit.Event{
+		TenantID:    &tid,
+		ActorUserID: &uid,
+		Action:      "user.roles_update",
+		TargetType:  "user",
+		TargetID:    &userID,
+		Metadata:    map[string]any{"role_ids": roleIDs},
+		Success:     true,
+		IP:          ip,
+		UserAgent:   ua,
+		RequestID:   reqID,
+	})
+
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
+	s.resolver.InvalidateUser(ctx, tenantID, userID)
+	return nil
+}
+
+// AddRole adds a single role to a user (idempotent).
+func (s *Service) AddRole(ctx context.Context, r *http.Request, tenantID, userID, roleID, actorID string) error {
+	exists, err := s.repo.RoleExists(ctx, tenantID, roleID)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return ErrRoleNotFound
+	}
+
+	if _, err := s.GetByID(ctx, tenantID, userID); err != nil {
+		return err
+	}
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := s.repo.AddRole(ctx, tx, tenantID, userID, roleID, actorID); err != nil {
+		return err
+	}
+
+	ip, ua, reqID := audit.EventFromRequest(r)
+	uid := actorID
+	tid := tenantID
+	_ = s.auditor.Record(ctx, tx, audit.Event{
+		TenantID:    &tid,
+		ActorUserID: &uid,
+		Action:      "user.role_assign",
+		TargetType:  "user",
+		TargetID:    &userID,
+		Metadata:    map[string]any{"role_id": roleID},
+		Success:     true,
+		IP:          ip,
+		UserAgent:   ua,
+		RequestID:   reqID,
+	})
+
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
+	s.resolver.InvalidateUser(ctx, tenantID, userID)
+	return nil
+}
+
+// RemoveRole removes a single role from a user.
+func (s *Service) RemoveRole(ctx context.Context, r *http.Request, tenantID, userID, roleID, actorID string) error {
+	exists, err := s.repo.RoleExists(ctx, tenantID, roleID)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return ErrRoleNotFound
+	}
+
+	if _, err := s.GetByID(ctx, tenantID, userID); err != nil {
+		return err
+	}
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := s.repo.RemoveRole(ctx, tx, tenantID, userID, roleID); err != nil {
+		return err
+	}
+
+	ip, ua, reqID := audit.EventFromRequest(r)
+	uid := actorID
+	tid := tenantID
+	_ = s.auditor.Record(ctx, tx, audit.Event{
+		TenantID:    &tid,
+		ActorUserID: &uid,
+		Action:      "user.role_unassign",
+		TargetType:  "user",
+		TargetID:    &userID,
+		Metadata:    map[string]any{"role_id": roleID},
+		Success:     true,
+		IP:          ip,
+		UserAgent:   ua,
+		RequestID:   reqID,
+	})
+
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
+	s.resolver.InvalidateUser(ctx, tenantID, userID)
+	return nil
 }

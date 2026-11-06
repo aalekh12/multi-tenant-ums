@@ -4,6 +4,8 @@ package tenant
 import (
 	"context"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // Tenant represents a tenant record.
@@ -45,6 +47,7 @@ type ListFilter struct {
 // Repository is the interface for tenant data access.
 type Repository interface {
 	Create(ctx context.Context, t *Tenant) error
+	CreateTx(ctx context.Context, tx pgx.Tx, t *Tenant) error
 	GetByID(ctx context.Context, id string) (*Tenant, error)
 	GetByCode(ctx context.Context, code string) (*Tenant, error)
 	GetPlatformTenant(ctx context.Context) (*Tenant, error)

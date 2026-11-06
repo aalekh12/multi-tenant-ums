@@ -3,6 +3,7 @@ package audit
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/yourusername/usermgmt/internal/middleware"
 	"github.com/yourusername/usermgmt/internal/platform/httpx"
 )
 
@@ -147,8 +149,10 @@ func (repo *Repository) List(ctx context.Context, f ListFilter) (*ListResult, er
 		); err != nil {
 			return nil, fmt.Errorf("audit: list scan: %w", err)
 		}
-		// pgx handles jsonb -> map[string]any via json tag scanning
-		l.Metadata = map[string]any{}
+		l.Metadata = make(map[string]any)
+		if len(meta) > 0 {
+			_ = json.Unmarshal(meta, &l.Metadata)
+		}
 		logs = append(logs, l)
 	}
 
@@ -172,13 +176,9 @@ func NewHandler(repo *Repository) *Handler {
 	return &Handler{repo: repo}
 }
 
-// ListAuditLogs handles GET /audit-logs.
+// ListAuditLogs handles GET /api/v1/audit-logs with keyset pagination.
 func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
-	// tenantID comes only from auth context - but we re-use middleware context here
-	// The route is protected so auth is guaranteed
-	// We read tenant_id from auth context via the middleware package
-	ctx := r.Context()
-	_ = ctx
+	auth := middleware.MustAuthContext(r.Context())
 
 	q := r.URL.Query()
 	limit := 20
@@ -189,6 +189,7 @@ func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filter := ListFilter{
+		TenantID:   auth.TenantID,
 		ActorID:    q.Get("actor_id"),
 		Action:     q.Get("action"),
 		TargetType: q.Get("target_type"),
@@ -210,16 +211,27 @@ func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	if cursorStr := q.Get("cursor"); cursorStr != "" {
 		c, err := DecodeCursor(cursorStr)
-		if err == nil {
-			filter.Cursor = c
+		if err != nil {
+			httpx.WriteError(w, r, http.StatusBadRequest, httpx.ErrCodeValidationFailed, "invalid cursor")
+			return
 		}
+		filter.Cursor = c
 	}
 
-	// get tenant from context (injected by authenticate middleware)
-	type auditCtxKey struct{}
-	_ = auditCtxKey{}
+	result, err := h.repo.List(r.Context(), filter)
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.ErrCodeInternal, "failed to list audit logs")
+		return
+	}
 
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"message": "not yet wired"})
+	if result.Logs == nil {
+		result.Logs = []Log{}
+	}
+
+	httpx.WriteJSON(w, http.StatusOK, KeysetResponse{
+		Data:       result.Logs,
+		NextCursor: result.NextCursor,
+	})
 }
 
 // KeysetResponse is the response shape for audit log listing.

@@ -218,26 +218,12 @@ func (s *Service) Login(ctx context.Context, r *http.Request, in *LoginInput) (*
 	}, nil
 }
 
-// ValidateToken validates an access token and checks active membership and tenant status.
+// ValidateToken validates an access token signature, issuer, audience, and claims.
 // Satisfies middleware.AuthValidator.
 func (s *Service) ValidateToken(r *http.Request, tokenStr string) (middleware.AuthContext, error) {
 	claims, err := s.issuer.Parse(tokenStr, jwtx.TypeAccess)
 	if err != nil {
 		return middleware.AuthContext{}, err
-	}
-
-	// Verify user active and membership active
-	mem, err := s.repo.GetMembership(r.Context(), claims.Subject, claims.TenantID)
-	if err != nil || mem == nil || mem.Status != "active" {
-		return middleware.AuthContext{}, ErrInvalidCredentials
-	}
-
-	tenant, err := s.repo.GetTenantByID(r.Context(), claims.TenantID)
-	if err != nil || tenant == nil {
-		return middleware.AuthContext{}, ErrInvalidCredentials
-	}
-	if tenant.Status == "suspended" {
-		return middleware.AuthContext{}, fmt.Errorf("TENANT_SUSPENDED")
 	}
 
 	return middleware.AuthContext{

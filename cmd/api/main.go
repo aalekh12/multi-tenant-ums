@@ -10,12 +10,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/yourusername/usermgmt/internal/api"
 	"github.com/yourusername/usermgmt/internal/config"
-	"github.com/yourusername/usermgmt/internal/middleware"
 	"github.com/yourusername/usermgmt/internal/platform/cache"
 	"github.com/yourusername/usermgmt/internal/platform/db"
-	"github.com/yourusername/usermgmt/internal/platform/httpx"
 )
 
 func main() {
@@ -77,40 +75,7 @@ func main() {
 	}
 
 	// 5. Router & Middlewares
-	r := chi.NewRouter()
-	r.Use(httpx.RequestIDMiddleware)
-	r.Use(middleware.Recover)
-	r.Use(middleware.Logger)
-
-	// Health check endpoints
-	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-	})
-
-	r.Get("/readyz", func(w http.ResponseWriter, r *http.Request) {
-		pingCtx, pingCancel := context.WithTimeout(r.Context(), cfg.DBHealthCheckPeriod)
-		defer pingCancel()
-
-		if err := pool.Ping(pingCtx); err != nil {
-			slog.Error("readiness check failed: db ping error", "err", err)
-			httpx.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{
-				"status": "unready",
-				"error":  "database unavailable",
-			})
-			return
-		}
-
-		if err := cacheBackend.Ping(pingCtx); err != nil {
-			slog.Error("readiness check failed: cache ping error", "err", err)
-			httpx.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{
-				"status": "unready",
-				"error":  "cache unavailable",
-			})
-			return
-		}
-
-		httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ready"})
-	})
+	r := api.NewRouter(cfg, pool, cacheBackend)
 
 	// 6. HTTP Server
 	server := &http.Server{
