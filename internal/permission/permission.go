@@ -74,16 +74,21 @@ func (r *Repository) GetUserPermissions(ctx context.Context, tenantID, userID st
 	return codes, nil
 }
 
+// PermissionGetter is an interface for fetching user permissions from the store.
+type PermissionGetter interface {
+	GetUserPermissions(ctx context.Context, tenantID, userID string) ([]string, error)
+}
+
 // Resolver resolves and caches user permissions.
 type Resolver struct {
-	repo     *Repository
+	repo     PermissionGetter
 	cache    cache.Cache
 	cacheTTL time.Duration
 	sf       singleFlight
 }
 
 // NewResolver creates a new permission Resolver.
-func NewResolver(repo *Repository, c cache.Cache, ttl time.Duration) *Resolver {
+func NewResolver(repo PermissionGetter, c cache.Cache, ttl time.Duration) *Resolver {
 	return &Resolver{
 		repo:     repo,
 		cache:    c,

@@ -8,12 +8,37 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/yourusername/usermgmt/internal/audit"
+	"github.com/yourusername/usermgmt/internal/middleware"
 	"github.com/yourusername/usermgmt/internal/platform/cache"
 	"github.com/yourusername/usermgmt/internal/platform/jwtx"
 	"github.com/yourusername/usermgmt/internal/platform/password"
 )
+
+// Repository is the data access interface for auth.
+type Repository interface {
+	FindUserByEmail(ctx context.Context, email string) (*UserRow, error)
+	GetMembership(ctx context.Context, userID, tenantID string) (*MembershipRow, error)
+	GetUserRoles(ctx context.Context, userID, tenantID string) ([]RoleInfo, error)
+	InsertRefreshToken(ctx context.Context, tx pgx.Tx, rt *RefreshToken) error
+	GetRefreshToken(ctx context.Context, jti string) (*RefreshToken, error)
+	MarkRefreshTokenUsed(ctx context.Context, tx pgx.Tx, jti string) error
+	RevokeFamily(ctx context.Context, familyID string) error
+	RevokeFamilyTx(ctx context.Context, tx pgx.Tx, familyID string) error
+	RevokeUserTenantTokens(ctx context.Context, tx pgx.Tx, userID, tenantID string) error
+	GetTenantByCode(ctx context.Context, code string) (*TenantRow, error)
+	GetTenantByID(ctx context.Context, id string) (*TenantRow, error)
+	GetUserByID(ctx context.Context, id string) (*UserRow, error)
+	GetActiveFamilyBySession(ctx context.Context, familyID, userID, tenantID string) (*RefreshToken, error)
+}
+
+// DB is the database interface required by auth Service.
+type DB interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
 
 // ErrInvalidCredentials is returned for any credential failure (equalized message).
 var ErrInvalidCredentials = fmt.Errorf("invalid credentials")
@@ -35,8 +60,8 @@ type Config struct {
 
 // Service holds auth business logic.
 type Service struct {
-	db      *pgxpool.Pool
-	repo    *Repo
+	db      DB
+	repo    Repository
 	issuer  *jwtx.Issuer
 	hasher  *password.Hasher
 	cache   cache.Cache
@@ -46,8 +71,8 @@ type Service struct {
 
 // NewService creates a new auth Service.
 func NewService(
-	db *pgxpool.Pool,
-	repo *Repo,
+	db DB,
+	repo Repository,
 	issuer *jwtx.Issuer,
 	hasher *password.Hasher,
 	c cache.Cache,
@@ -190,6 +215,35 @@ func (s *Service) Login(ctx context.Context, r *http.Request, in *LoginInput) (*
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		ExpiresIn:    int(s.cfg.AccessTTL.Seconds()),
+	}, nil
+}
+
+// ValidateToken validates an access token and checks active membership and tenant status.
+// Satisfies middleware.AuthValidator.
+func (s *Service) ValidateToken(r *http.Request, tokenStr string) (middleware.AuthContext, error) {
+	claims, err := s.issuer.Parse(tokenStr, jwtx.TypeAccess)
+	if err != nil {
+		return middleware.AuthContext{}, err
+	}
+
+	// Verify user active and membership active
+	mem, err := s.repo.GetMembership(r.Context(), claims.Subject, claims.TenantID)
+	if err != nil || mem == nil || mem.Status != "active" {
+		return middleware.AuthContext{}, ErrInvalidCredentials
+	}
+
+	tenant, err := s.repo.GetTenantByID(r.Context(), claims.TenantID)
+	if err != nil || tenant == nil {
+		return middleware.AuthContext{}, ErrInvalidCredentials
+	}
+	if tenant.Status == "suspended" {
+		return middleware.AuthContext{}, fmt.Errorf("TENANT_SUSPENDED")
+	}
+
+	return middleware.AuthContext{
+		UserID:    claims.Subject,
+		TenantID:  claims.TenantID,
+		SessionID: claims.SessionID,
 	}, nil
 }
 
