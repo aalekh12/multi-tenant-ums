@@ -382,17 +382,25 @@ func (s *Service) Suspend(ctx context.Context, r *http.Request, tenantID, actorI
 	}
 
 	ip, ua, reqID := audit.EventFromRequest(r)
-	_ = s.auditor.Record(ctx, tx, audit.Event{
+	if err := s.auditor.Record(ctx, tx, audit.Event{
 		TenantID:    &tenantID,
 		ActorUserID: &actorID,
 		Action:      "tenant.suspend",
 		TargetType:  "tenant",
 		TargetID:    &tenantID,
-		Success:     true,
-		IP:          ip,
-		UserAgent:   ua,
-		RequestID:   reqID,
-	})
+		Metadata: map[string]any{
+			"tenant_id": tenantID,
+			"code":      t.Code,
+			"name":      t.Name,
+			"status":    "suspended",
+		},
+		Success:   true,
+		IP:        ip,
+		UserAgent: ua,
+		RequestID: reqID,
+	}); err != nil {
+		return nil, fmt.Errorf("audit suspend: %w", err)
+	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
@@ -424,17 +432,25 @@ func (s *Service) Activate(ctx context.Context, r *http.Request, tenantID, actor
 	}
 
 	ip, ua, reqID := audit.EventFromRequest(r)
-	_ = s.auditor.Record(ctx, tx, audit.Event{
+	if err := s.auditor.Record(ctx, tx, audit.Event{
 		TenantID:    &tenantID,
 		ActorUserID: &actorID,
 		Action:      "tenant.activate",
 		TargetType:  "tenant",
 		TargetID:    &tenantID,
-		Success:     true,
-		IP:          ip,
-		UserAgent:   ua,
-		RequestID:   reqID,
-	})
+		Metadata: map[string]any{
+			"tenant_id": tenantID,
+			"code":      t.Code,
+			"name":      t.Name,
+			"status":    "active",
+		},
+		Success:   true,
+		IP:        ip,
+		UserAgent: ua,
+		RequestID: reqID,
+	}); err != nil {
+		return nil, fmt.Errorf("audit activate: %w", err)
+	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err

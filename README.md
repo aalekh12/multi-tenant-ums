@@ -96,26 +96,50 @@ flowchart TD
    cd multi-tenant-ums
    ```
 
-2. Start PostgreSQL, Redis, and run migrations:
+2. Copy environment file (if customized):
+   ```bash
+   cp .env.example .env
+   ```
+
+3. Start PostgreSQL and Redis:
    ```bash
    docker compose up -d postgres redis
    ```
 
-3. Seed demo data:
+4. Run database migrations:
+   ```bash
+   docker compose up --build migrate
+   ```
+
+5. Seed demo data:
    ```bash
    go run ./cmd/seed
    ```
 
-4. Run the API:
+6. Build and start the API container:
    ```bash
-   docker compose up -d api
+   docker compose up -d --build api
    ```
-   Or run the API directly on your host:
+   > **Note:** Always include `--build` when updating Go source code so Docker recompiles the binary instead of using cached images.
+
+The API will be available at `http://localhost:8081`.
+
+### Option B: Run Locally on Host
+
+1. Ensure Postgres and Redis are running (e.g. via `docker compose up -d postgres redis`).
+2. Run database migrations:
+   ```bash
+   # Using docker compose migration runner:
+   docker compose up --build migrate
+   ```
+3. Seed demo data:
+   ```bash
+   go run ./cmd/seed
+   ```
+4. Start the API on port 8081 (set `HTTP_PORT=8081` in `.env`):
    ```bash
    go run ./cmd/api
    ```
-
-The API will be available at `http://localhost:8080`.
 
 ---
 
@@ -139,34 +163,34 @@ The database seed tool (`cmd/seed/main.go`) creates the following accounts with 
 
 ### Step 1: Healthcheck
 ```bash
-curl -i http://localhost:8080/healthz
-curl -i http://localhost:8080/readyz
+curl -i http://localhost:8081/healthz
+curl -i http://localhost:8081/readyz
 ```
 
 ### Step 2: Login as Platform Admin & List Tenants
 ```bash
 # Login to platform tenant
-LOGIN_RESP=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+LOGIN_RESP=$(curl -s -X POST http://localhost:8081/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"root@platform.test","password":"ChangeMe!12345","tenant_code":"platform"}')
 
 ROOT_TOKEN=$(echo $LOGIN_RESP | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
 
 # List all tenants
-curl -i -H "Authorization: Bearer $ROOT_TOKEN" http://localhost:8080/api/v1/tenants
+curl -i -H "Authorization: Bearer $ROOT_TOKEN" http://localhost:8081/api/v1/tenants
 ```
 
 ### Step 3: Login as Acme Admin & Create a User
 ```bash
 # Login to Acme Corp
-ACME_RESP=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+ACME_RESP=$(curl -s -X POST http://localhost:8081/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@acme.test","password":"ChangeMe!12345","tenant_code":"acme"}')
 
 ACME_TOKEN=$(echo $ACME_RESP | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
 
 # Create a new user in Acme
-CREATE_USER_RESP=$(curl -s -X POST http://localhost:8080/api/v1/users \
+CREATE_USER_RESP=$(curl -s -X POST http://localhost:8081/api/v1/users \
   -H "Authorization: Bearer $ACME_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"email":"alice@acme.test","full_name":"Alice Engineer","password":"ChangeMe!12345"}')
@@ -178,21 +202,21 @@ USER_ID=$(echo $CREATE_USER_RESP | grep -o '"id":"[^"]*' | head -1 | cut -d'"' -
 ### Step 4: Login as Multi-Tenant User (`shared@example.test`)
 ```bash
 # Login to Acme context
-SHARED_RESP=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+SHARED_RESP=$(curl -s -X POST http://localhost:8081/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"shared@example.test","password":"ChangeMe!12345","tenant_code":"acme"}')
 
 SHARED_TOKEN=$(echo $SHARED_RESP | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
 
 # Inspect permissions in Acme (viewer only: user:read, role:read, etc.)
-curl -s -H "Authorization: Bearer $SHARED_TOKEN" http://localhost:8080/api/v1/auth/me
+curl -s -H "Authorization: Bearer $SHARED_TOKEN" http://localhost:8081/api/v1/auth/me
 ```
 
 ### Step 5: Switch Tenant to Globex
 ```bash
 # Fetch Globex tenant ID from tenant listing or database
 # Switch context
-SWITCH_RESP=$(curl -s -X POST http://localhost:8080/api/v1/auth/switch-tenant \
+SWITCH_RESP=$(curl -s -X POST http://localhost:8081/api/v1/auth/switch-tenant \
   -H "Authorization: Bearer $SHARED_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"target_tenant_id":"<globex-tenant-id>"}')
@@ -200,33 +224,64 @@ SWITCH_RESP=$(curl -s -X POST http://localhost:8080/api/v1/auth/switch-tenant \
 GLOBEX_TOKEN=$(echo $SWITCH_RESP | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
 
 # Inspect permissions in Globex (tenant_admin: full control)
-curl -s -H "Authorization: Bearer $GLOBEX_TOKEN" http://localhost:8080/api/v1/auth/me
+curl -s -H "Authorization: Bearer $GLOBEX_TOKEN" http://localhost:8081/api/v1/auth/me
 ```
 
 ### Step 6: Verify Strict Tenant Isolation (Cross-Tenant Access Returns 404)
 ```bash
 # Attempt to read Acme's user using Globex token -> Returns 404 Not Found!
-curl -i -H "Authorization: Bearer $GLOBEX_TOKEN" http://localhost:8080/api/v1/users/$USER_ID
+curl -i -H "Authorization: Bearer $GLOBEX_TOKEN" http://localhost:8081/api/v1/users/$USER_ID
 ```
 *Response: `HTTP/1.1 404 Not Found` with `{ "error": { "code": "NOT_FOUND", "message": "user not found" } }`.*
 
 ### Step 7: Verify RBAC Permission Guard (Viewer Cannot Mutate)
 ```bash
 # Login as Acme viewer
-VIEWER_RESP=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+VIEWER_RESP=$(curl -s -X POST http://localhost:8081/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"viewer@acme.test","password":"ChangeMe!12345","tenant_code":"acme"}')
 
 VIEWER_TOKEN=$(echo $VIEWER_RESP | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
 
 # Attempt to delete user -> Returns 403 Forbidden!
-curl -i -X DELETE -H "Authorization: Bearer $VIEWER_TOKEN" http://localhost:8080/api/v1/users/$USER_ID
+curl -i -X DELETE -H "Authorization: Bearer $VIEWER_TOKEN" http://localhost:8081/api/v1/users/$USER_ID
 ```
 *Response: `HTTP/1.1 403 Forbidden` with `{ "error": { "code": "FORBIDDEN", "details": [{"issue": "requires user:delete"}] } }`.*
 
 ### Step 8: Query Keyset-Paginated Audit Logs
+
+#### 8A. Tenant Admin (Strictly Scoped to Own Tenant)
 ```bash
-curl -i -H "Authorization: Bearer $ACME_TOKEN" "http://localhost:8080/api/v1/audit-logs?limit=10"
+# Acme Admin queries Acme's audit trail
+curl -i -H "Authorization: Bearer $ACME_TOKEN" "http://localhost:8081/api/v1/audit-logs?limit=10"
+```
+
+#### 8B. Platform Admin (Platform-Wide or Tenant-Specific)
+```bash
+# Platform Admin sees all platform events (tenant.create, tenant.suspend, etc.)
+curl -i -H "Authorization: Bearer $ROOT_TOKEN" "http://localhost:8081/api/v1/audit-logs?limit=10"
+
+# Platform Admin filters by a specific tenant
+curl -i -H "Authorization: Bearer $ROOT_TOKEN" "http://localhost:8081/api/v1/audit-logs?tenant_id=<target-tenant-id>&limit=10"
+```
+
+### Step 9: Suspend & Reactivate a Tenant (with Immediate Token Revocation)
+```bash
+# 1. Platform Admin suspends Globex
+curl -i -X POST -H "Authorization: Bearer $ROOT_TOKEN" \
+  http://localhost:8081/api/v1/tenants/<globex-tenant-id>/suspend
+
+# 2. Existing tokens for Globex are immediately invalidated -> Returns 403 TENANT_SUSPENDED
+curl -i -H "Authorization: Bearer $GLOBEX_TOKEN" http://localhost:8081/api/v1/auth/me
+
+# 3. New logins for Globex are rejected
+curl -i -X POST http://localhost:8081/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@globex.test","password":"ChangeMe!12345","tenant_code":"globex"}'
+
+# 4. Platform Admin reactivates Globex
+curl -i -X POST -H "Authorization: Bearer $ROOT_TOKEN" \
+  http://localhost:8081/api/v1/tenants/<globex-tenant-id>/activate
 ```
 
 ---
@@ -266,10 +321,28 @@ go test -race ./...
 
 ## 9. API Documentation & Artifacts
 
-- **Interactive Swagger UI:** Served locally at [`http://localhost:8080/swagger/index.html`](http://localhost:8080/swagger/index.html).
+- **Interactive Swagger UI:** Served locally at [`http://localhost:8081/swagger/index.html`](http://localhost:8081/swagger/index.html).
 - **OpenAPI 3.0 Specification:** Stored at [`docs/openapi.yaml`](https://github.com/aalekh12/multi-tenant-ums/blob/master/docs/openapi.yaml).
 - **Postman Collection:** Stored at [`docs/postman_collection.json`](https://github.com/aalekh12/multi-tenant-ums/blob/master/docs/postman_collection.json).
-- **Architecture Design Document:** Read [`docs/DESIGN.md`]([file:///docs/DESIGN.md](https://github.com/aalekh12/multi-tenant-ums/blob/master/docs/DESIGN.md)) for full architectural trade-offs.
+- **Architecture Design Document:** Read [`docs/DESIGN.md`](https://github.com/aalekh12/multi-tenant-ums/blob/master/docs/DESIGN.md) for full architectural trade-offs.
 - **Database ER Diagram:** [Visual Diagram](https://github.com/aalekh12/multi-tenant-ums/blob/master/docs/multi_tenant_database_erd.jpg) 
-- **SQL Relationship Documentation**  [`docs/er-diagram.md`](https://github.com/aalekh12/multi-tenant-ums/blob/master/docs/er-diagram.md).
+- **SQL Relationship Documentation:** [`docs/er-diagram.md`](https://github.com/aalekh12/multi-tenant-ums/blob/master/docs/er-diagram.md).
+
+---
+
+## 10. Troubleshooting & Common Run Issues
+
+Below are common errors encountered during local deployment or testing, their root causes, and verified fixes:
+
+| Error / Symptom | Root Cause | Solution / Fix |
+|---|---|---|
+| **Port 8080 Conflict**<br>`listen tcp 0.0.0.0:8080: bind: Only one usage of each socket address...` | Host service (e.g., Windows `db_setup` or another web server) is occupying port `8080`. | The docker-compose mapping binds host port `8081:8080`. Connect to **`http://localhost:8081`**. If running with `go run ./cmd/api`, set `HTTP_PORT=8081` in your `.env`. |
+| **Go Code Changes Not Reflected**<br>`500 INTERNAL_ERROR` persists after modifying Go files in Docker | `docker compose up -d api` reuses the previously built container image and does not recompile the Go binary. | Always pass the `--build` flag to force recompilation:<br>`docker compose up -d --build api` |
+| **PostgreSQL `inet` Input Error**<br>`ERROR: invalid input syntax for type inet: "172.21.0.1:41384"` | Go's `http.Request.RemoteAddr` includes the ephemeral client port (`IP:port`). PostgreSQL `inet` only accepts pure IP addresses or CIDR blocks. | Stripped client port with `net.SplitHostPort` in `audit.EventFromRequest()` prior to saving to `audit_logs` and `refresh_tokens`. |
+| **Audit Logs 500 on Read**<br>`cannot scan inet (OID 869) in binary format into *string` | PostgreSQL returns `inet` in binary format by default in `pgx/v5`, which cannot scan directly into `*string`. | Wrapped column in `host(al.ip)` inside `internal/audit/repository.go` so PostgreSQL outputs standard text representation. |
+| **Audit Logs Missing on Suspend/Activate**<br>Platform Admin suspends a tenant, but `GET /audit-logs` shows empty array | Suspend/activate events are stored with `tenant_id = target_tenant_id`, while the Platform Admin belongs to `platform` tenant. | In `internal/audit/repository.go`, Platform Admin now has system-wide audit visibility across all tenants by default, and can filter by `?tenant_id=<id>`. |
+| **Database Does Not Exist**<br>`FATAL: database "multi_tenant_ums" does not exist (SQLSTATE 3D000)` | Docker volume `postgres_data` was initialized before database configuration. | Reset Docker volumes:<br>`docker compose down -v`<br>`docker compose up -d postgres redis`<br>`docker compose up --build migrate`<br>`go run ./cmd/seed` |
+| **Swagger UI Spec Not Found**<br>`Fetch error Not Found /openapi.yaml` | Relative filesystem path was not present in the minimal Alpine Docker runtime container. | Embedded `openapi.yaml` directly into the Go executable via `//go:embed` directive in `internal/api/openapi_spec.go`. |
+| **Go Mod Version Mismatch**<br>`go.mod requires go >= 1.26.0 (running go 1.22)` | Local Go toolchain version mismatch with container builder. | Aligned `Dockerfile` builder stage with matching Go Alpine version and verified `go.mod`. |
+
 

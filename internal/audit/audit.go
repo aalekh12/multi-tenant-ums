@@ -3,7 +3,9 @@ package audit
 
 import (
 	"context"
+	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -65,14 +67,47 @@ func (rec *Recorder) Record(ctx context.Context, q interface {
 	return err
 }
 
+func extractIP(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		ip := strings.TrimSpace(parts[0])
+		if net.ParseIP(ip) != nil {
+			return ip
+		}
+	}
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		ip := strings.TrimSpace(xri)
+		if net.ParseIP(ip) != nil {
+			return ip
+		}
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil && net.ParseIP(host) != nil {
+		return host
+	}
+	if net.ParseIP(r.RemoteAddr) != nil {
+		return r.RemoteAddr
+	}
+	return ""
+}
+
 // EventFromRequest populates common request fields from an http.Request and AuthContext.
 func EventFromRequest(r *http.Request) (ip *string, ua *string, reqID *string) {
-	ipStr := r.RemoteAddr
-	ip = &ipStr
-	uaStr := r.UserAgent()
-	ua = &uaStr
-	ridStr := httpx.RequestIDFromCtx(r.Context())
-	reqID = &ridStr
+	if r == nil {
+		return nil, nil, nil
+	}
+	if ipStr := extractIP(r); ipStr != "" {
+		ip = &ipStr
+	}
+	if uaStr := r.UserAgent(); uaStr != "" {
+		ua = &uaStr
+	}
+	if ridStr := httpx.RequestIDFromCtx(r.Context()); ridStr != "" {
+		reqID = &ridStr
+	}
 	return
 }
 

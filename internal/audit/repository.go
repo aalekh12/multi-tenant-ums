@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,6 +24,19 @@ type Repository struct {
 // NewRepository creates a new audit Repository.
 func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{db: db}
+}
+
+// IsPlatformTenant checks if the given tenant id is the platform tenant.
+func (repo *Repository) IsPlatformTenant(ctx context.Context, tenantID string) (bool, error) {
+	if tenantID == "" {
+		return false, nil
+	}
+	var isPlatform bool
+	err := repo.db.QueryRow(ctx, `SELECT is_platform FROM tenants WHERE id = $1`, tenantID).Scan(&isPlatform)
+	if err != nil {
+		return false, err
+	}
+	return isPlatform, nil
 }
 
 // ListFilter holds filters for listing audit logs.
@@ -83,9 +97,15 @@ func (repo *Repository) List(ctx context.Context, f ListFilter) (*ListResult, er
 		f.Limit = 20
 	}
 
-	args := []any{f.TenantID}
-	conditions := []string{"al.tenant_id = $1"}
-	idx := 2
+	var args []any
+	var conditions []string
+	idx := 1
+
+	if f.TenantID != "" {
+		conditions = append(conditions, fmt.Sprintf("al.tenant_id = $%d", idx))
+		args = append(args, f.TenantID)
+		idx++
+	}
 
 	if f.ActorID != "" {
 		conditions = append(conditions, fmt.Sprintf("al.actor_user_id = $%d", idx))
@@ -123,10 +143,13 @@ func (repo *Repository) List(ctx context.Context, f ListFilter) (*ListResult, er
 		idx += 2
 	}
 
-	where := strings.Join(conditions, " AND ")
+	where := "1=1"
+	if len(conditions) > 0 {
+		where = strings.Join(conditions, " AND ")
+	}
 	query := fmt.Sprintf(`
 		SELECT al.id, al.tenant_id, al.actor_user_id, al.action, al.target_type, al.target_id,
-		       al.metadata, al.success, al.ip, al.user_agent, al.request_id, al.created_at
+		       al.metadata, al.success, host(al.ip), al.user_agent, al.request_id, al.created_at
 		FROM audit_logs al
 		WHERE %s
 		ORDER BY al.created_at DESC, al.id DESC
@@ -180,6 +203,8 @@ func NewHandler(repo *Repository) *Handler {
 func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	auth := middleware.MustAuthContext(r.Context())
 
+	isPlatform, _ := h.repo.IsPlatformTenant(r.Context(), auth.TenantID)
+
 	q := r.URL.Query()
 	limit := 20
 	if ls := q.Get("limit"); ls != "" {
@@ -188,8 +213,15 @@ func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	targetTenantID := auth.TenantID
+	if isPlatform {
+		// Platform admin can query a specific tenant with ?tenant_id=...
+		// or view all logs across the system if no tenant_id is provided
+		targetTenantID = q.Get("tenant_id")
+	}
+
 	filter := ListFilter{
-		TenantID:   auth.TenantID,
+		TenantID:   targetTenantID,
 		ActorID:    q.Get("actor_id"),
 		Action:     q.Get("action"),
 		TargetType: q.Get("target_type"),
@@ -220,6 +252,7 @@ func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.repo.List(r.Context(), filter)
 	if err != nil {
+		slog.ErrorContext(r.Context(), "failed to list audit logs", "error", err)
 		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.ErrCodeInternal, "failed to list audit logs")
 		return
 	}

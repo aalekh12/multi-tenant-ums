@@ -90,7 +90,7 @@ func TestEventFromRequest(t *testing.T) {
 	handler := httpx.RequestIDMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip, ua, reqID := audit.EventFromRequest(r)
 		require.NotNil(t, ip)
-		assert.Equal(t, "192.168.1.100:54321", *ip)
+		assert.Equal(t, "192.168.1.100", *ip)
 
 		require.NotNil(t, ua)
 		assert.Equal(t, "TestClient/1.0", *ua)
