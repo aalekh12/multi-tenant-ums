@@ -327,6 +327,7 @@ go test -race ./...
 - **Architecture Design Document:** Read [`docs/DESIGN.md`](https://github.com/aalekh12/multi-tenant-ums/blob/master/docs/DESIGN.md) for full architectural trade-offs.
 - **Database ER Diagram:** [Visual Diagram](https://github.com/aalekh12/multi-tenant-ums/blob/master/docs/multi_tenant_database_erd.jpg) 
 - **SQL Relationship Documentation:** [`docs/er-diagram.md`](https://github.com/aalekh12/multi-tenant-ums/blob/master/docs/er-diagram.md).
+- **Demo Video in Postman:** [Watch](https://github.com/aalekh12/multi-tenant-ums/blob/master/docs/Demo.mp4)
 
 ---
 
