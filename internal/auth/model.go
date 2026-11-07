@@ -17,7 +17,8 @@ type RefreshInput struct {
 
 // SwitchTenantInput is the request body for POST /auth/switch-tenant.
 type SwitchTenantInput struct {
-	TenantCode string `json:"tenant_code" validate:"required"`
+	TenantCode     string `json:"tenant_code"`
+	TargetTenantID string `json:"target_tenant_id"`
 }
 
 // ChangePasswordInput is the body for PUT /users/{id}/password.

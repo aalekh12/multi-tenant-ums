@@ -156,12 +156,14 @@ paths:
           application/json:
             schema:
               type: object
-              required: [target_tenant_id]
               properties:
                 target_tenant_id:
                   type: string
                   format: uuid
                   example: 550e8400-e29b-41d4-a716-446655440000
+                tenant_code:
+                  type: string
+                  example: globex
       responses:
         '200':
           description: Switched tenant context successfully
@@ -619,9 +621,12 @@ paths:
           application/json:
             schema:
               type: object
-              required: [password]
+              required: [old_password, new_password]
               properties:
-                password:
+                old_password:
+                  type: string
+                  example: ChangeMe!12345
+                new_password:
                   type: string
                   example: NewSecurePassword!123
       responses:
@@ -833,12 +838,13 @@ paths:
           application/json:
             schema:
               type: object
-              required: [permission_ids]
+              required: [permission_codes]
               properties:
-                permission_ids:
+                permission_codes:
                   type: array
                   items:
-                    type: integer
+                    type: string
+                  example: ["user:read", "user:create"]
       responses:
         '200':
           description: Permissions assigned and caches invalidated
@@ -893,6 +899,12 @@ paths:
           schema:
             type: integer
             default: 50
+        - name: tenant_id
+          in: query
+          description: Tenant ID to filter by (Platform Admin only)
+          schema:
+            type: string
+            format: uuid
         - name: action
           in: query
           schema:

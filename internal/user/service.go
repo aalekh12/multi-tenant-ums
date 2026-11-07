@@ -335,6 +335,11 @@ func (s *Service) ChangePassword(ctx context.Context, r *http.Request, tenantID,
 		return err
 	}
 
+	// Revoke all active refresh tokens for this user upon password change
+	if err := s.repo.RevokeUserTenantTokens(ctx, tx, userID, tenantID); err != nil {
+		return fmt.Errorf("user: revoke tokens on password change: %w", err)
+	}
+
 	ip, ua, reqID := audit.EventFromRequest(r)
 	uid := actorID
 	tid := tenantID

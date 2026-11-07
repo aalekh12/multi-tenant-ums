@@ -353,7 +353,17 @@ func (s *Service) Logout(ctx context.Context, r *http.Request, userID, tenantID,
 
 // SwitchTenant issues a new token pair for the user scoped to a different tenant.
 func (s *Service) SwitchTenant(ctx context.Context, r *http.Request, userID, currentTenantID string, in *SwitchTenantInput) (*TokenPair, error) {
-	tenant, err := s.repo.GetTenantByCode(ctx, in.TenantCode)
+	if in.TenantCode == "" && in.TargetTenantID == "" {
+		return nil, ErrInvalidCredentials
+	}
+
+	var tenant *TenantRow
+	var err error
+	if in.TenantCode != "" {
+		tenant, err = s.repo.GetTenantByCode(ctx, in.TenantCode)
+	} else {
+		tenant, err = s.repo.GetTenantByID(ctx, in.TargetTenantID)
+	}
 	if err != nil || tenant == nil {
 		return nil, ErrInvalidCredentials
 	}
